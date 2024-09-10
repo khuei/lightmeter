@@ -1,4 +1,8 @@
-# LIGHTMETER
+# Light Meter
+
+<p align="center">
+  <img src="./cover.jpg" alt="image of program interface" width="400"/>
+</p>
 
 ## Overview
 
@@ -6,10 +10,6 @@
 sensor to calculate optimal camera settings for exposure. The app allows users
 to adjust ISO and aperture settings and calculates the corresponding shutter
 speed to achieve proper exposure.
-
-<p align="center">
-  <img src="./cover.jpg" alt="image of program interface" width="400"/>
-</p>
 
 ## Installation
 
