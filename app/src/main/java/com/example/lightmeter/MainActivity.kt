@@ -16,15 +16,38 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.lightmeter.ui.theme.LightMeterTheme
+import kotlin.math.ln
+import kotlin.math.pow
 
 class MainActivity : ComponentActivity(), SensorEventListener {
 
@@ -75,30 +98,41 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
 			// ISO Control
 			Text(
-				text = "ISO: ${isoSteps[isoIndex]}",
+				text = "ISO",
 				style = MaterialTheme.typography.titleLarge,
 				modifier = Modifier.padding(8.dp)
 			)
 			Row(
 				modifier = Modifier.fillMaxWidth(),
-				horizontalArrangement = Arrangement.SpaceBetween
+				horizontalArrangement = Arrangement.Center,
+				verticalAlignment = Alignment.CenterVertically
 			) {
-				Button(
-					onClick = {
-						if (isoIndex > 0) isoIndex--
-					},
+				IconButton(
+					onClick = { if (isoIndex > 0) isoIndex-- },
 					enabled = isoIndex > 0
 				) {
-					Text("Decrease ISO")
+					Icon(
+						Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+						contentDescription = "Decrease ISO",
+						modifier = Modifier.size(40.dp)
+					)
 				}
 
-				Button(
-					onClick = {
-						if (isoIndex < isoSteps.size - 1) isoIndex++
-					},
+				Text(
+					text = "${isoSteps[isoIndex]}",
+					fontSize = 40.sp,
+					modifier = Modifier.padding(horizontal = 16.dp)
+				)
+
+				IconButton(
+					onClick = { if (isoIndex < isoSteps.size - 1) isoIndex++ },
 					enabled = isoIndex < isoSteps.size - 1
 				) {
-					Text("Increase ISO")
+					Icon(
+						Icons.AutoMirrored.Filled.KeyboardArrowRight,
+						contentDescription = "Increase ISO",
+						modifier = Modifier.size(40.dp)
+					)
 				}
 			}
 
@@ -106,30 +140,41 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
 			// Aperture Control
 			Text(
-				text = "Aperture: f/${apertureSteps[apertureIndex]}",
+				text = "Aperture",
 				style = MaterialTheme.typography.titleLarge,
 				modifier = Modifier.padding(8.dp)
 			)
 			Row(
 				modifier = Modifier.fillMaxWidth(),
-				horizontalArrangement = Arrangement.SpaceBetween
+				horizontalArrangement = Arrangement.Center,
+				verticalAlignment = Alignment.CenterVertically
 			) {
-				Button(
-					onClick = {
-						if (apertureIndex > 0) apertureIndex--
-					},
+				IconButton(
+					onClick = { if (apertureIndex > 0) apertureIndex-- },
 					enabled = apertureIndex > 0
 				) {
-					Text("Decrease Aperture")
+					Icon(
+						Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+						contentDescription = "Decrease Aperture",
+						modifier = Modifier.size(40.dp)
+					)
 				}
 
-				Button(
-					onClick = {
-						if (apertureIndex < apertureSteps.size - 1) apertureIndex++
-					},
+				Text(
+					text = "f/${apertureSteps[apertureIndex]}",
+					fontSize = 40.sp,
+					modifier = Modifier.padding(horizontal = 16.dp)
+				)
+
+				IconButton(
+					onClick = { if (apertureIndex < apertureSteps.size - 1) apertureIndex++ },
 					enabled = apertureIndex < apertureSteps.size - 1
 				) {
-					Text("Increase Aperture")
+					Icon(
+						Icons.AutoMirrored.Filled.KeyboardArrowRight,
+						contentDescription = "Increase Aperture",
+						modifier = Modifier.size(40.dp)
+					)
 				}
 			}
 
@@ -149,19 +194,17 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 		}
 	}
 
-
 	// Function to calculate shutter speed based on lux, ISO, and aperture
 	private fun calculateShutterSpeed(lux: Float, iso: Int, aperture: Float): Double {
 		// Base EV (Assuming EV = 0 for ISO 100 and aperture f/1.0 at lux = 1)
 		val baseEv = 0
 
 		// Calculate EV based on ISO
-		val ev = baseEv + Math.log(iso / 100.0) / Math.log(2.0)
+		val ev = baseEv + ln(iso / 100.0) / ln(2.0)
 
 		// Shutter speed (in seconds)
 		// Shutter Speed T = (N^2) / (L * 2^EV)
-		val shutterSpeed = (aperture * aperture) / (lux * Math.pow(2.0, ev))
-		return shutterSpeed
+		return (aperture * aperture) / (lux * 2.0.pow(ev))
 	}
 
 	override fun onCreate(savedInstanceState: Bundle?) {
@@ -265,7 +308,7 @@ override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
 	// Do nothing
 }
 
-override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
 	super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 	if (requestCode == 1 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
 		startSensor()
