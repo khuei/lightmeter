@@ -43,6 +43,19 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         var isoIndex by remember { mutableIntStateOf(0) }  // Index in the isoSteps list
         var apertureIndex by remember { mutableIntStateOf(0) }  // Index in the apertureSteps list
 
+        val currentIso = isoSteps[isoIndex]
+        val currentAperture = apertureSteps[apertureIndex]
+
+        // Calculate shutter speed
+        val shutterSpeed = calculateShutterSpeed(luxValue, currentIso, currentAperture)
+
+        // Convert shutter speed to "1/time" format
+        val shutterSpeedText = if (shutterSpeed >= 1) {
+            String.format("%.1fs", shutterSpeed) // If shutter speed is slower than 1 second
+        } else {
+            "1/${(1 / shutterSpeed).toInt()}" // Convert to fractional form if faster than 1 second
+        }
+
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Lux: ${luxValue.toInt()}")
 
@@ -100,11 +113,32 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Display calculated shutter speed
+            Text("Shutter Speed: $shutterSpeedText")
+
             // Update camera settings based on the selected ISO and aperture values
             LaunchedEffect(isoIndex, apertureIndex) {
                 updateCameraSettings(isoSteps[isoIndex], apertureSteps[apertureIndex])
             }
         }
+    }
+
+
+
+    // Function to calculate shutter speed based on lux, ISO, and aperture
+    private fun calculateShutterSpeed(lux: Float, iso: Int, aperture: Float): Double {
+        // Base EV (Assuming EV = 0 for ISO 100 and aperture f/1.0 at lux = 1)
+        val baseEv = 0
+
+        // Calculate EV based on ISO
+        val ev = baseEv + Math.log(iso / 100.0) / Math.log(2.0)
+
+        // Shutter speed (in seconds)
+        // Shutter Speed T = (N^2) / (L * 2^EV)
+        val shutterSpeed = (aperture * aperture) / (lux * Math.pow(2.0, ev))
+        return shutterSpeed
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -177,11 +211,16 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     }
 
     private fun updateCameraSettings(iso: Int, aperture: Float) {
+        val shutterSpeed = calculateShutterSpeed(luxValue, iso, aperture)
+
         captureRequestBuilder?.apply {
             set(CaptureRequest.SENSOR_SENSITIVITY, iso)
             set(CaptureRequest.LENS_APERTURE, aperture)
+            // Convert shutter speed from seconds to nanoseconds
+            set(CaptureRequest.SENSOR_EXPOSURE_TIME, (shutterSpeed * 1_000_000_000).toLong())
         }
     }
+
 
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
