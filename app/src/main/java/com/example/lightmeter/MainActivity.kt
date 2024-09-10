@@ -1,17 +1,5 @@
 package com.example.lightmeter
 
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.lightmeter.ui.theme.LightMeterTheme
-
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -19,15 +7,105 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.camera2.CameraAccessException
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraDevice
+import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CaptureRequest
+import android.os.Bundle
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.lightmeter.ui.theme.LightMeterTheme
 
-@Suppress("DEPRECATION")
 class MainActivity : ComponentActivity(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
     private var lightSensor: Sensor? = null
     private var luxValue: Float = 0f
+
+    private lateinit var cameraManager: CameraManager
+    private var captureRequestBuilder: CaptureRequest.Builder? = null
+
+    // Define ISO and aperture steps
+    private val isoSteps = listOf(100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600)
+    private val apertureSteps = listOf(1.8f, 2.8f, 4f, 5.6f, 8f, 11f, 16f, 22f)
+
+    @Composable
+    fun CameraControlScreen() {
+        var isoIndex by remember { mutableIntStateOf(0) }  // Index in the isoSteps list
+        var apertureIndex by remember { mutableIntStateOf(0) }  // Index in the apertureSteps list
+
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Lux: ${luxValue.toInt()}")
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ISO Control
+            Text("ISO: ${isoSteps[isoIndex]}")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Button(
+                    onClick = {
+                        if (isoIndex > 0) isoIndex--
+                    },
+                    enabled = isoIndex > 0
+                ) {
+                    Text("Decrease ISO")
+                }
+
+                Button(
+                    onClick = {
+                        if (isoIndex < isoSteps.size - 1) isoIndex++
+                    },
+                    enabled = isoIndex < isoSteps.size - 1
+                ) {
+                    Text("Increase ISO")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Aperture Control
+            Text("Aperture: f/${apertureSteps[apertureIndex]}")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Button(
+                    onClick = {
+                        if (apertureIndex > 0) apertureIndex--
+                    },
+                    enabled = apertureIndex > 0
+                ) {
+                    Text("Decrease Aperture")
+                }
+
+                Button(
+                    onClick = {
+                        if (apertureIndex < apertureSteps.size - 1) apertureIndex++
+                    },
+                    enabled = apertureIndex < apertureSteps.size - 1
+                ) {
+                    Text("Increase Aperture")
+                }
+            }
+
+            // Update camera settings based on the selected ISO and aperture values
+            LaunchedEffect(isoIndex, apertureIndex) {
+                updateCameraSettings(isoSteps[isoIndex], apertureSteps[apertureIndex])
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,25 +113,73 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             LightMeterTheme {
                 // A surface container using the 'background' color from the theme
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    Print("Lux: ${luxValue.toInt()}")
+                    CameraControlScreen()
                 }
             }
         }
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
+        cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
 
         // Request camera permission if not already granted
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 1)
         } else {
             startSensor()
+            setupCamera()
         }
     }
 
     private fun startSensor() {
         lightSensor?.also { light ->
             sensorManager.registerListener(this, light, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+    }
+
+    private fun setupCamera() {
+        val cameraId = cameraManager.cameraIdList[0]
+        try {
+            val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+            characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                ?.getOutputSizes(android.graphics.ImageFormat.JPEG)
+
+            if (ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.CAMERA
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return
+            }
+            cameraManager.openCamera(cameraId, object : CameraDevice.StateCallback() {
+                override fun onOpened(camera: CameraDevice) {
+                    captureRequestBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+                }
+
+                override fun onDisconnected(camera: CameraDevice) {
+                    camera.close()
+                }
+
+                override fun onError(camera: CameraDevice, error: Int) {
+                    Toast.makeText(this@MainActivity, "Camera error: $error", Toast.LENGTH_SHORT).show()
+                }
+            }, null)
+        } catch (e: CameraAccessException) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun updateCameraSettings(iso: Int, aperture: Float) {
+        captureRequestBuilder?.apply {
+            set(CaptureRequest.SENSOR_SENSITIVITY, iso)
+            set(CaptureRequest.LENS_APERTURE, aperture)
         }
     }
 
@@ -65,7 +191,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 setContent {
                     LightMeterTheme {
                         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                            Print("Lux: ${luxValue.toInt()}")
+                            CameraControlScreen()
                         }
                     }
                 }
@@ -77,32 +203,16 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         // Do nothing
     }
 
-    @Deprecated("Deprecated in Java")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 1 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             startSensor()
+            setupCamera()
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         sensorManager.unregisterListener(this)
-    }
-}
-
-@Composable
-fun Print(input: String, modifier: Modifier = Modifier) {
-    Text(
-        text = input,
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    LightMeterTheme {
-        Print("Lux: 0")
     }
 }
